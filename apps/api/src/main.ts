@@ -30,7 +30,16 @@ import { RequestIdInterceptor } from './common/interceptors/request-id.intercept
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // High-Priority Native Preflight OPTIONS & CORS Handler
+  // Security Middleware (First)
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: false,
+      crossOriginOpenerPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+
+  // High-Priority Native Preflight OPTIONS & CORS Handler (Second - Preserves headers)
   app.use((req: any, res: any, next: any) => {
     const clientOrigin = req.headers.origin || req.headers['origin'] || 'https://webhook-auto-web.onrender.com';
     res.setHeader('Access-Control-Allow-Origin', clientOrigin);
@@ -46,22 +55,6 @@ async function bootstrap() {
     }
     next();
   });
-
-  // NestJS Native CORS Configuration
-  app.enableCors({
-    origin: (origin, callback) => callback(null, true),
-    credentials: true,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Webhook-Signature', 'X-Webhook-Timestamp', 'X-Idempotency-Key', 'Accept'],
-  });
-
-  // Security Middleware
-  app.use(
-    helmet({
-      crossOriginResourcePolicy: { policy: 'cross-origin' },
-      crossOriginEmbedderPolicy: false,
-    })
-  );
 
   // Global Interceptors & Pipes
   app.useGlobalInterceptors(new RequestIdInterceptor());
