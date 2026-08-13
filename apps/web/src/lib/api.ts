@@ -17,6 +17,7 @@ export async function apiRequest<T = any>(
 
   try {
     const res = await fetch(`${API_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`, {
+      mode: 'cors',
       ...options,
       headers,
     });
