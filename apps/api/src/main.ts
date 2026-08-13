@@ -24,37 +24,20 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import helmet from 'helmet';
-import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
+import cors from 'cors';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Security Middleware (First)
+  // Official Standard CORS Middleware
   app.use(
-    helmet({
-      crossOriginResourcePolicy: false,
-      crossOriginOpenerPolicy: false,
-      crossOriginEmbedderPolicy: false,
+    cors({
+      origin: ['https://webhook-auto-web.onrender.com', 'http://localhost:3000'],
+      credentials: true,
+      methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Webhook-Signature', 'X-Webhook-Timestamp', 'X-Idempotency-Key', 'Accept'],
     })
   );
-
-  // High-Priority Native Preflight OPTIONS & CORS Handler (Second - Preserves headers)
-  app.use((req: any, res: any, next: any) => {
-    const clientOrigin = req.headers.origin || req.headers['origin'] || 'https://webhook-auto-web.onrender.com';
-    res.setHeader('Access-Control-Allow-Origin', clientOrigin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, X-Request-ID, X-Webhook-Signature, X-Webhook-Timestamp, X-Idempotency-Key, Accept'
-    );
-
-    if (req.method === 'OPTIONS') {
-      return res.status(204).end();
-    }
-    next();
-  });
 
   // Global Interceptors & Pipes
   app.useGlobalInterceptors(new RequestIdInterceptor());
