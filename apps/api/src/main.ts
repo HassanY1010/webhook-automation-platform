@@ -29,15 +29,22 @@ import cors from 'cors';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Official Standard CORS Middleware
-  app.use(
-    cors({
-      origin: ['https://webhook-auto-web.onrender.com', 'http://localhost:3000'],
-      credentials: true,
-      methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Webhook-Signature', 'X-Webhook-Timestamp', 'X-Idempotency-Key', 'Accept'],
-    })
-  );
+  // Unconditional Preflight & CORS Header Handler
+  app.use((req: any, res: any, next: any) => {
+    const origin = req.headers.origin || 'https://webhook-auto-web.onrender.com';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Request-ID, X-Webhook-Signature, X-Webhook-Timestamp, X-Idempotency-Key'
+    );
+
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    next();
+  });
 
   // Global Interceptors & Pipes
   app.useGlobalInterceptors(new RequestIdInterceptor());
