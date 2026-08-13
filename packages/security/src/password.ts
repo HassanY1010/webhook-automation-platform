@@ -10,11 +10,17 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  if (!storedHash || !storedHash.includes(':')) return false;
-  const [salt, keyHex] = storedHash.split(':');
-  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
-  const storedKeyBuffer = Buffer.from(keyHex, 'hex');
-  return crypto.timingSafeEqual(derivedKey, storedKeyBuffer);
+  try {
+    if (!storedHash || typeof storedHash !== 'string' || !storedHash.includes(':')) return false;
+    const [salt, keyHex] = storedHash.split(':');
+    if (!salt || !keyHex) return false;
+    const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
+    const storedKeyBuffer = Buffer.from(keyHex, 'hex');
+    if (derivedKey.length !== storedKeyBuffer.length) return false;
+    return crypto.timingSafeEqual(derivedKey, storedKeyBuffer);
+  } catch {
+    return false;
+  }
 }
 
 export function hashApiKey(key: string): string {
