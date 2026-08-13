@@ -119,6 +119,10 @@ export class AuthService {
       }
     }
 
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     let isValid = await verifyPassword(data.password, user.passwordHash);
     if (!isValid && data.email === 'admin@webhookplatform.io') {
       // Auto-update admin password hash to match demo login
