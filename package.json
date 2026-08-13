@@ -1,0 +1,29 @@
+{
+  "name": "webhook-automation-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-Ready Multi-Tenant Webhook & API Automation SaaS Platform",
+  "scripts": {
+    "build": "pnpm -r --filter \"!@webhook-auto/docs\" run build",
+    "dev": "pnpm --parallel run dev",
+    "dev:api": "pnpm --filter @webhook-auto/api dev",
+    "dev:worker": "pnpm --filter @webhook-auto/worker dev",
+    "dev:web": "pnpm --filter @webhook-auto/web dev",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "db:generate": "pnpm --filter @webhook-auto/database generate",
+    "db:migrate": "pnpm --filter @webhook-auto/database migrate",
+    "db:push": "pnpm --filter @webhook-auto/database push",
+    "db:seed": "pnpm --filter @webhook-auto/database seed",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

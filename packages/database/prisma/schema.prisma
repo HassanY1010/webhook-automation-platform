@@ -1,0 +1,314 @@
+// Prisma Schema for Webhook Automation Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  OWNER
+  ADMIN
+  EDITOR
+  OPERATOR
+  VIEWER
+}
+
+enum BotStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  DISABLED
+  ERROR
+}
+
+enum BotMode {
+  LIVE
+  DRY_RUN
+  DEMO
+}
+
+enum SourceType {
+  WEBHOOK
+  REST_API
+  POLLING_API
+  CUSTOM_HTTP
+}
+
+enum ActionType {
+  HTTP_REQUEST
+  REST_API
+  WEBHOOK
+  DATABASE_ACTION
+  TELEGRAM_NOTIFICATION
+  EMAIL_NOTIFICATION
+  CUSTOM_ACTION
+}
+
+enum ExecutionStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+  SKIPPED
+  DUPLICATE
+}
+
+enum PlanTier {
+  FREE
+  STARTER
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+model User {
+  id               String               @id @default(uuid())
+  email            String               @unique
+  fullName         String
+  passwordHash     String
+  isEmailVerified  Boolean              @default(false)
+  avatarUrl        String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  memberships      OrganizationMember[]
+  auditLogs        AuditLog[]
+  apiKeys          ApiKey[]
+
+  @@map("users")
+}
+
+model Organization {
+  id            String               @id @default(uuid())
+  name          String
+  slug          String               @unique
+  isDemo        Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  members       OrganizationMember[]
+  bots          Bot[]
+  sources       Source[]
+  events        Event[]
+  executions    Execution[]
+  apiKeys       ApiKey[]
+  subscriptions Subscription[]
+  usageRecords  UsageRecord[]
+  auditLogs     AuditLog[]
+  secrets       WebhookSecret[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  role           RoleName     @default(VIEWER)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+model Bot {
+  id             String        @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  status         BotStatus     @default(DRAFT)
+  mode           BotMode       @default(LIVE)
+  publicKey      String        @unique @default(uuid())
+  version        Int           @default(1)
+  payloadSchema  Json?
+  rules          Json?
+  actions        Json
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions       BotVersion[]
+  sources        Source[]
+  events         Event[]
+  executions     Execution[]
+
+  @@index([organizationId])
+  @@map("bots")
+}
+
+model BotVersion {
+  id            String   @id @default(uuid())
+  botId         String
+  versionNumber Int
+  payloadSchema Json?
+  rules         Json?
+  actions       Json
+  publishedAt   DateTime @default(now())
+  bot           Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@unique([botId, versionNumber])
+  @@map("bot_versions")
+}
+
+model Source {
+  id             String       @id @default(uuid())
+  organizationId String
+  botId          String?
+  name           String
+  type           SourceType   @default(WEBHOOK)
+  config         Json?
+  secretKeyHash  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bot            Bot?         @relation(fields: [botId], references: [id], onDelete: SetNull)
+
+  @@map("sources")
+}
+
+model Event {
+  id             String       @id @default(uuid())
+  organizationId String
+  botId          String
+  idempotencyKey String?
+  payload        Json
+  headers        Json?
+  sourceIp       String?
+  status         String       @default("RECEIVED")
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bot            Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
+  executions     Execution[]
+
+  @@unique([botId, idempotencyKey])
+  @@index([organizationId, createdAt])
+  @@map("events")
+}
+
+model Execution {
+  id             String          @id @default(uuid())
+  organizationId String
+  botId          String
+  eventId        String
+  status         ExecutionStatus @default(QUEUED)
+  mode           BotMode         @default(LIVE)
+  retryAttempt   Int             @default(0)
+  durationMs     Int             @default(0)
+  errorDetails   Json?
+  actionResults  Json?
+  startedAt      DateTime        @default(now())
+  completedAt    DateTime?
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bot            Bot             @relation(fields: [botId], references: [id], onDelete: Cascade)
+  event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  steps          ExecutionStep[]
+
+  @@index([organizationId, status])
+  @@index([botId, startedAt])
+  @@map("executions")
+}
+
+model ExecutionStep {
+  id          String    @id @default(uuid())
+  executionId String
+  stepName    String
+  status      String
+  input       Json?
+  output      Json?
+  error       String?
+  durationMs  Int       @default(0)
+  timestamp   DateTime  @default(now())
+  execution   Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@map("execution_steps")
+}
+
+model ApiKey {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  name           String
+  keyHash        String       @unique
+  prefix         String
+  scopes         String[]
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model WebhookSecret {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  secretEncrypted String
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_secrets")
+}
+
+model Subscription {
+  id             String       @id @default(uuid())
+  organizationId String
+  planTier       PlanTier     @default(FREE)
+  status         String       @default("ACTIVE")
+  currentPeriodStart DateTime @default(now())
+  currentPeriodEnd   DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model UsageRecord {
+  id             String       @id @default(uuid())
+  organizationId String
+  metric         String       // "events", "executions", "api_calls"
+  count          Int          @default(0)
+  period         String       // "2026-08"
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, metric, period])
+  @@map("usage_records")
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String?
+  action         String
+  resource       String
+  resourceId     String?
+  details        Json?
+  ipAddress      String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  description String?
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("feature_flags")
+}
