@@ -32,10 +32,8 @@ async function bootstrap() {
 
   // High-Priority Native Preflight OPTIONS & CORS Handler
   app.use((req: any, res: any, next: any) => {
-    const origin = req.headers.origin;
-    if (origin) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    }
+    const clientOrigin = req.headers.origin || req.headers['origin'] || 'https://webhook-auto-web.onrender.com';
+    res.setHeader('Access-Control-Allow-Origin', clientOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
     res.setHeader(
@@ -51,7 +49,7 @@ async function bootstrap() {
 
   // NestJS Native CORS Configuration
   app.enableCors({
-    origin: ['https://webhook-auto-web.onrender.com', 'http://localhost:3000'],
+    origin: (origin, callback) => callback(null, true),
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Webhook-Signature', 'X-Webhook-Timestamp', 'X-Idempotency-Key', 'Accept'],
@@ -60,7 +58,8 @@ async function bootstrap() {
   // Security Middleware
   app.use(
     helmet({
-      crossOriginResourcePolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      crossOriginEmbedderPolicy: false,
     })
   );
 
