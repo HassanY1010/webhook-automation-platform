@@ -34,12 +34,14 @@ async function bootstrap() {
   app.use(helmet());
 
   // CORS Configuration
-  const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',');
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, postman) or any web frontend
+      callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Webhook-Signature', 'X-Webhook-Timestamp', 'X-Idempotency-Key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Webhook-Signature', 'X-Webhook-Timestamp', 'X-Idempotency-Key', 'Accept'],
   });
 
   // Global Interceptors & Pipes
