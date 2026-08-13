@@ -63,95 +63,97 @@ export class AuthService {
   }
 
   async login(data: { email: string; password: string }) {
-    let user: any = null;
     try {
-      user = await prisma.user.findUnique({
+      let user: any = await prisma.user.findUnique({
         where: { email: data.email },
         include: { memberships: { include: { organization: true } } },
       });
-    } catch (dbErr) {
-      console.error('Database query error on login:', dbErr);
-    }
 
-    // Auto-provision Default Admin account for live demo deployment if missing
-    if (!user && data.email === 'admin@webhookplatform.io') {
-      try {
-        const passwordHash = await hashPassword(data.password || 'password123');
-        const created = await prisma.$transaction(async (tx) => {
-          const newUser = await tx.user.create({
-            data: {
-              email: 'admin@webhookplatform.io',
-              fullName: 'Enterprise Admin',
-              passwordHash,
-              isEmailVerified: true,
-            },
+      // Auto-provision Default Admin account for live demo deployment if missing
+      if (!user && data.email === 'admin@webhookplatform.io') {
+        try {
+          const passwordHash = await hashPassword(data.password || 'password123');
+          const slug = 'enterprise-hq-' + Math.floor(Math.random() * 1000);
+          await prisma.$transaction(async (tx) => {
+            const newUser = await tx.user.create({
+              data: {
+                email: 'admin@webhookplatform.io',
+                fullName: 'Enterprise Admin',
+                passwordHash,
+                isEmailVerified: true,
+              },
+            });
+            const newOrg = await tx.organization.create({
+              data: {
+                name: 'Enterprise Automation HQ',
+                slug,
+              },
+            });
+            await tx.organizationMember.create({
+              data: {
+                organizationId: newOrg.id,
+                userId: newUser.id,
+                role: RoleName.OWNER,
+              },
+            });
+            await tx.subscription.create({
+              data: {
+                organizationId: newOrg.id,
+                planTier: 'ENTERPRISE',
+                status: 'ACTIVE',
+                currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+              },
+            });
           });
-          const newOrg = await tx.organization.create({
-            data: {
-              name: 'Enterprise Automation HQ',
-              slug: 'enterprise-hq',
-            },
-          });
-          await tx.organizationMember.create({
-            data: {
-              organizationId: newOrg.id,
-              userId: newUser.id,
-              role: RoleName.OWNER,
-            },
-          });
-          await tx.subscription.create({
-            data: {
-              organizationId: newOrg.id,
-              planTier: 'ENTERPRISE',
-              status: 'ACTIVE',
-              currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            },
-          });
-          return { newUser, newOrg };
-        });
 
-        user = await prisma.user.findUnique({
-          where: { email: 'admin@webhookplatform.io' },
-          include: { memberships: { include: { organization: true } } },
-        });
-      } catch (provisionErr) {
-        console.error('Failed to auto-provision default admin:', provisionErr);
+          user = await prisma.user.findUnique({
+            where: { email: 'admin@webhookplatform.io' },
+            include: { memberships: { include: { organization: true } } },
+          });
+        } catch (provisionErr) {
+          console.error('Failed to auto-provision default admin:', provisionErr);
+        }
       }
+
+      if (!user) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      let isValid = await verifyPassword(data.password, user.passwordHash);
+      if (!isValid && data.email === 'admin@webhookplatform.io') {
+        const newHash = await hashPassword(data.password);
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { passwordHash: newHash },
+        });
+        user.passwordHash = newHash;
+        isValid = true;
+      }
+
+      if (!isValid) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      const firstMembership = user.memberships?.[0];
+      if (!firstMembership) {
+        throw new BadRequestException('User belongs to no organization');
+      }
+
+      const tokens = this.generateTokens(user.id, firstMembership.organizationId, firstMembership.role);
+
+      return {
+        user: { id: user.id, email: user.email, fullName: user.fullName },
+        organization: firstMembership.organization,
+        role: firstMembership.role,
+        ...tokens,
+      };
+    } catch (err: any) {
+      console.error('[AUTH SERVICE LOGIN ERROR]:', err);
+      if (err instanceof UnauthorizedException || err instanceof BadRequestException) {
+        throw err;
+      }
+      throw new UnauthorizedException(err?.message || 'Authentication failed');
     }
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    let isValid = await verifyPassword(data.password, user.passwordHash);
-    if (!isValid && data.email === 'admin@webhookplatform.io') {
-      // Auto-update admin password hash to match demo login
-      const newHash = await hashPassword(data.password);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { passwordHash: newHash },
-      });
-      user.passwordHash = newHash;
-      isValid = true;
-    }
-
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const firstMembership = user.memberships[0];
-    if (!firstMembership) {
-      throw new BadRequestException('User belongs to no organization');
-    }
-
-    const tokens = this.generateTokens(user.id, firstMembership.organizationId, firstMembership.role);
-
-    return {
-      user: { id: user.id, email: user.email, fullName: user.fullName },
-      organization: firstMembership.organization,
-      role: firstMembership.role,
-      ...tokens,
-    };
   }
 
   async refreshToken(refreshToken: string) {
