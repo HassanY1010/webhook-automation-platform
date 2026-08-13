@@ -15,15 +15,14 @@ services:
           name: webhook-postgres
           property: connectionString
       - key: REDIS_URL
-        fromKeyValue:
+        fromService:
+          type: redis
           name: webhook-redis
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
-      - key: CORS_ORIGINS
-        value: https://webhook-auto-web.onrender.com
 
-  - type: worker
+  - type: web
     name: webhook-auto-worker
     env: node
     plan: free
@@ -37,7 +36,8 @@ services:
           name: webhook-postgres
           property: connectionString
       - key: REDIS_URL
-        fromKeyValue:
+        fromService:
+          type: redis
           name: webhook-redis
           property: connectionString
 
@@ -53,10 +53,13 @@ services:
       - key: NEXT_PUBLIC_API_URL
         value: https://webhook-auto-api.onrender.com
 
+  - type: redis
+    name: webhook-redis
+    plan: free
+    ipAllowList: []
+
 databases:
   - name: webhook-postgres
-    plan: free
-
-keyValues:
-  - name: webhook-redis
+    databaseName: webhook_db
+    user: webhook_user
     plan: free
