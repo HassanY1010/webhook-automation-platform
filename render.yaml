@@ -3,7 +3,7 @@ services:
     name: webhook-auto-api
     env: node
     plan: free
-    buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @webhook-auto/database build && pnpm --filter @webhook-auto/api build
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @webhook-auto/database build && pnpm --filter @webhook-auto/database db:push && pnpm --filter @webhook-auto/api build
     startCommand: node apps/api/dist/main.js
     envVars:
       - key: NODE_ENV
