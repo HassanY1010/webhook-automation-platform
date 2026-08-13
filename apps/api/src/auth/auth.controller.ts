@@ -12,14 +12,14 @@ export class AuthController {
   @Post('register')
   async register(@Body() body: any) {
     const validated = RegisterSchema.parse(body);
-    const result = await this.authService.register(validated);
+    const result = await this.authService.register(validated as any);
     return { success: true, data: result };
   }
 
   @Post('login')
   async login(@Body() body: any) {
     const validated = LoginSchema.parse(body);
-    const result = await this.authService.login(validated);
+    const result = await this.authService.login(validated as any);
     return { success: true, data: result };
   }
 
