@@ -27,7 +27,7 @@ services:
     env: node
     plan: free
     buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @webhook-auto/database build && pnpm --filter @webhook-auto/worker build
-    startCommand: node apps/worker/dist/main.js
+    startCommand: node apps/worker/dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
