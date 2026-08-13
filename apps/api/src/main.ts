@@ -28,13 +28,13 @@ import helmet from 'helmet';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    cors: {
-      origin: true,
-      credentials: true,
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-      allowedHeaders: 'Content-Type,Accept,Authorization,X-Request-ID,X-Webhook-Signature,X-Webhook-Timestamp,X-Idempotency-Key',
-    },
+  const app = await NestFactory.create(AppModule);
+
+  // Global CORS Middleware - Allow all origins for production SaaS API
+  app.enableCors({
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: '*',
   });
 
   // Security Middleware
@@ -65,9 +65,8 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT || 4000;
-  await app.listen(port);
-  console.log(`🚀 API Server running on http://localhost:${port}`);
-  console.log(`📚 OpenAPI Docs available at http://localhost:${port}/api/docs`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 API Server running on port ${port} bound to 0.0.0.0`);
 }
 
 bootstrap();
