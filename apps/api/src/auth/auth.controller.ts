@@ -11,16 +11,32 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() body: any) {
-    const validated = RegisterSchema.parse(body);
-    const result = await this.authService.register(validated as any);
-    return { success: true, data: result };
+    try {
+      const validated = RegisterSchema.parse(body);
+      const result = await this.authService.register(validated as any);
+      return { success: true, data: result };
+    } catch (err: any) {
+      if (err?.name === 'ZodError') {
+        const firstIssue = err.issues?.[0]?.message || 'Invalid registration input';
+        throw new BadRequestException(firstIssue);
+      }
+      throw err;
+    }
   }
 
   @Post('login')
   async login(@Body() body: any) {
-    const validated = LoginSchema.parse(body);
-    const result = await this.authService.login(validated as any);
-    return { success: true, data: result };
+    try {
+      const validated = LoginSchema.parse(body);
+      const result = await this.authService.login(validated as any);
+      return { success: true, data: result };
+    } catch (err: any) {
+      if (err?.name === 'ZodError') {
+        const firstIssue = err.issues?.[0]?.message || 'Invalid login input';
+        throw new BadRequestException(firstIssue);
+      }
+      throw err;
+    }
   }
 
   @Post('refresh')
