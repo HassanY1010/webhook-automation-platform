@@ -26,7 +26,24 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
 
+import { execSync } from 'child_process';
+
 async function bootstrap() {
+  // Auto-migrate production PostgreSQL database schema at runtime startup
+  try {
+    const schemaPath = path.resolve(__dirname, '../../packages/database/prisma/schema.prisma');
+    const altSchemaPath = path.resolve(__dirname, '../../../packages/database/prisma/schema.prisma');
+    const targetSchema = fs.existsSync(schemaPath) ? schemaPath : fs.existsSync(altSchemaPath) ? altSchemaPath : null;
+
+    if (targetSchema && process.env.DATABASE_URL) {
+      console.log('📦 Auto-migrating PostgreSQL database schema on startup...');
+      execSync(`npx prisma db push --schema="${targetSchema}" --accept-data-loss`, { stdio: 'inherit' });
+      console.log('✅ PostgreSQL database schema migrated successfully!');
+    }
+  } catch (migErr: any) {
+    console.warn('Database migration status:', migErr.message);
+  }
+
   const app = await NestFactory.create(AppModule);
 
   // Unconditional Preflight & CORS Header Handler
