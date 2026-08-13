@@ -31,8 +31,14 @@ if (!process.env.DATABASE_URL) {
   }
 }
 
+let dbUrl = process.env.DATABASE_URL;
+if (dbUrl && !dbUrl.includes('sslmode=') && (process.env.NODE_ENV === 'production' || dbUrl.includes('render.com') || dbUrl.includes('dpg-'))) {
+  dbUrl = dbUrl.includes('?') ? `${dbUrl}&sslmode=no-verify` : `${dbUrl}?sslmode=no-verify`;
+}
+
 export * from '@prisma/client';
 
 export const prisma = new PrismaClient({
+  datasources: dbUrl ? { db: { url: dbUrl } } : undefined,
   log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 });
