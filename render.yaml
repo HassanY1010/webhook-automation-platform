@@ -1,10 +1,7 @@
 services:
-  # ---------------------------------------------------------------------------
-  # 1. NestJS Backend API Service
-  # ---------------------------------------------------------------------------
   - type: web
     name: webhook-auto-api
-    runtime: node
+    env: node
     plan: free
     buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @webhook-auto/database build && pnpm --filter @webhook-auto/api build
     startCommand: node apps/api/dist/main.js
@@ -18,8 +15,7 @@ services:
           name: webhook-postgres
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          type: key_value
+        fromKeyValue:
           name: webhook-redis
           property: connectionString
       - key: JWT_SECRET
@@ -27,12 +23,9 @@ services:
       - key: CORS_ORIGINS
         value: https://webhook-auto-web.onrender.com
 
-  # ---------------------------------------------------------------------------
-  # 2. BullMQ Worker Background Process
-  # ---------------------------------------------------------------------------
   - type: worker
     name: webhook-auto-worker
-    runtime: node
+    env: node
     plan: free
     buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @webhook-auto/database build && pnpm --filter @webhook-auto/worker build
     startCommand: node apps/worker/dist/main.js
@@ -44,17 +37,13 @@ services:
           name: webhook-postgres
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          type: key_value
+        fromKeyValue:
           name: webhook-redis
           property: connectionString
 
-  # ---------------------------------------------------------------------------
-  # 3. Next.js Web Frontend Service
-  # ---------------------------------------------------------------------------
   - type: web
     name: webhook-auto-web
-    runtime: node
+    env: node
     plan: free
     buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @webhook-auto/web build
     startCommand: pnpm --filter @webhook-auto/web start
@@ -64,16 +53,10 @@ services:
       - key: NEXT_PUBLIC_API_URL
         value: https://webhook-auto-api.onrender.com
 
-# ---------------------------------------------------------------------------
-# Databases & Key-Value Stores (PostgreSQL & Redis)
-# ---------------------------------------------------------------------------
 databases:
   - name: webhook-postgres
-    databaseName: webhook_db
-    user: webhook_user
     plan: free
 
 keyValues:
   - name: webhook-redis
     plan: free
-    ipAllowList: []
