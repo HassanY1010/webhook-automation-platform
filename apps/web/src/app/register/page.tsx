@@ -37,7 +37,11 @@ export default function RegisterPage() {
       login(res.data.accessToken, res.data.user);
       router.push('/dashboard');
     } else {
-      setError(res.error?.message || (isRtl ? 'فشل إنشاء الحساب، يرجى المحاولة مجدداً.' : 'Registration failed'));
+      const errorMessage =
+        (typeof res.error === 'string' ? res.error : res.error?.message) ||
+        (res as any).message ||
+        (isRtl ? 'فشل إنشاء الحساب، يرجى المحاولة مجدداً.' : 'Registration failed');
+      setError(Array.isArray(errorMessage) ? errorMessage[0] : errorMessage);
     }
   };
 
