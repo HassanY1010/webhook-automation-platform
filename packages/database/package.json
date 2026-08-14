@@ -10,15 +10,16 @@
     "generate": "node prisma-runner.js generate",
     "migrate": "node prisma-runner.js migrate dev",
     "push": "node prisma-runner.js db push",
-    "seed": "ts-node prisma/seed.ts"
+    "db:push": "node prisma-runner.js db push",
+    "seed": "node prisma/seed.js",
+    "db:seed": "node prisma/seed.js"
   },
   "dependencies": {
-    "@prisma/client": "^5.9.1"
+    "@prisma/client": "^5.22.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "prisma": "^5.9.1",
-    "ts-node": "^10.9.2",
+    "prisma": "^5.22.0",
     "typescript": "^5.3.3"
   }
 }
