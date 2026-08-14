@@ -1,41 +1,39 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
-const crypto = __importStar(require("crypto"));
-const prisma = new client_1.PrismaClient();
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+// Load root .env file if DATABASE_URL is not set
+if (!process.env.DATABASE_URL) {
+    const rootEnvPath = path.resolve(__dirname, '../../../.env');
+    if (fs.existsSync(rootEnvPath)) {
+        const envContent = fs.readFileSync(rootEnvPath, 'utf8');
+        envContent.split('\n').forEach((line) => {
+            const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+            if (match) {
+                const key = match[1];
+                let val = match[2] || '';
+                if (val.startsWith('"') && val.endsWith('"'))
+                    val = val.slice(1, -1);
+                if (val.startsWith("'") && val.endsWith("'"))
+                    val = val.slice(1, -1);
+                process.env[key] = val.trim();
+            }
+        });
+    }
+}
+let dbUrl = process.env.DATABASE_URL;
+if (dbUrl && !dbUrl.includes('sslmode=') && !dbUrl.includes('ssl=')) {
+    if (dbUrl.includes('.render.com') ||
+        dbUrl.includes('neon.tech') ||
+        dbUrl.includes('supabase.co')) {
+        dbUrl = dbUrl.includes('?') ? `${dbUrl}&sslmode=no-verify` : `${dbUrl}?sslmode=no-verify`;
+    }
+}
+const prisma = new client_1.PrismaClient({
+    datasources: dbUrl ? { db: { url: dbUrl } } : undefined,
+});
 async function hashPassword(password) {
     const salt = crypto.randomBytes(16).toString('hex');
     const derivedKey = crypto.scryptSync(password, salt, 64);
@@ -63,7 +61,10 @@ async function main() {
     const passwordHash = await hashPassword('Admin123456!');
     const adminUser = await prisma.user.upsert({
         where: { email: 'admin@webhookplatform.io' },
-        update: {},
+        update: {
+            passwordHash, // Refresh passwordHash so demo login is guaranteed
+            fullName: 'System Owner',
+        },
         create: {
             email: 'admin@webhookplatform.io',
             fullName: 'System Owner',
@@ -73,7 +74,10 @@ async function main() {
     });
     const demoUser = await prisma.user.upsert({
         where: { email: 'demo@webhookplatform.io' },
-        update: {},
+        update: {
+            passwordHash,
+            fullName: 'Demo Sandbox User',
+        },
         create: {
             email: 'demo@webhookplatform.io',
             fullName: 'Demo Sandbox User',
@@ -129,23 +133,33 @@ async function main() {
             role: client_1.RoleName.OPERATOR,
         },
     });
-    // 5. Subscriptions
-    await prisma.subscription.create({
-        data: {
-            organizationId: mainOrg.id,
-            planTier: client_1.PlanTier.ENTERPRISE,
-            status: 'ACTIVE',
-            currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        },
+    // 5. Subscriptions (Idempotent)
+    const existingMainSub = await prisma.subscription.findFirst({
+        where: { organizationId: mainOrg.id },
     });
-    await prisma.subscription.create({
-        data: {
-            organizationId: demoOrg.id,
-            planTier: client_1.PlanTier.FREE,
-            status: 'ACTIVE',
-            currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        },
+    if (!existingMainSub) {
+        await prisma.subscription.create({
+            data: {
+                organizationId: mainOrg.id,
+                planTier: client_1.PlanTier.ENTERPRISE,
+                status: 'ACTIVE',
+                currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            },
+        });
+    }
+    const existingDemoSub = await prisma.subscription.findFirst({
+        where: { organizationId: demoOrg.id },
     });
+    if (!existingDemoSub) {
+        await prisma.subscription.create({
+            data: {
+                organizationId: demoOrg.id,
+                planTier: client_1.PlanTier.FREE,
+                status: 'ACTIVE',
+                currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            },
+        });
+    }
     // 6. Demo & Sample Bots
     const demoBotPublicKey = 'demo-bot-12345';
     await prisma.bot.upsert({
@@ -193,4 +207,3 @@ main()
     .finally(async () => {
     await prisma.$disconnect();
 });
-//# sourceMappingURL=seed.js.map
