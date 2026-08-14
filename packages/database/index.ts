@@ -32,8 +32,20 @@ if (!process.env.DATABASE_URL) {
 }
 
 let dbUrl = process.env.DATABASE_URL;
-if (dbUrl && !dbUrl.includes('sslmode=') && (process.env.NODE_ENV === 'production' || dbUrl.includes('render.com') || dbUrl.includes('dpg-'))) {
-  dbUrl = dbUrl.includes('?') ? `${dbUrl}&sslmode=no-verify` : `${dbUrl}?sslmode=no-verify`;
+if (dbUrl) {
+  // If sslmode is not already configured
+  if (!dbUrl.includes('sslmode=') && !dbUrl.includes('ssl=')) {
+    // Only external Render database URLs (ending in .render.com) or cloud DB providers require SSL
+    // Internal Render database URLs (e.g. host is dpg-xxx-a without .render.com) connect via private network and do not use TLS
+    if (
+      dbUrl.includes('.render.com') ||
+      dbUrl.includes('neon.tech') ||
+      dbUrl.includes('supabase.co') ||
+      dbUrl.includes('pooler.supabase.com')
+    ) {
+      dbUrl = dbUrl.includes('?') ? `${dbUrl}&sslmode=no-verify` : `${dbUrl}?sslmode=no-verify`;
+    }
+  }
 }
 
 export * from './src/init-db';

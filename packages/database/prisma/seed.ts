@@ -21,7 +21,20 @@ if (!process.env.DATABASE_URL) {
   }
 }
 
-const prisma = new PrismaClient();
+let dbUrl = process.env.DATABASE_URL;
+if (dbUrl && !dbUrl.includes('sslmode=') && !dbUrl.includes('ssl=')) {
+  if (
+    dbUrl.includes('.render.com') ||
+    dbUrl.includes('neon.tech') ||
+    dbUrl.includes('supabase.co')
+  ) {
+    dbUrl = dbUrl.includes('?') ? `${dbUrl}&sslmode=no-verify` : `${dbUrl}?sslmode=no-verify`;
+  }
+}
+
+const prisma = new PrismaClient({
+  datasources: dbUrl ? { db: { url: dbUrl } } : undefined,
+});
 
 async function hashPassword(password: string): Promise<string> {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -55,7 +68,10 @@ async function main() {
 
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@webhookplatform.io' },
-    update: {},
+    update: {
+      passwordHash, // Refresh passwordHash so demo login is guaranteed
+      fullName: 'System Owner',
+    },
     create: {
       email: 'admin@webhookplatform.io',
       fullName: 'System Owner',
@@ -66,7 +82,10 @@ async function main() {
 
   const demoUser = await prisma.user.upsert({
     where: { email: 'demo@webhookplatform.io' },
-    update: {},
+    update: {
+      passwordHash,
+      fullName: 'Demo Sandbox User',
+    },
     create: {
       email: 'demo@webhookplatform.io',
       fullName: 'Demo Sandbox User',
@@ -127,24 +146,34 @@ async function main() {
     },
   });
 
-  // 5. Subscriptions
-  await prisma.subscription.create({
-    data: {
-      organizationId: mainOrg.id,
-      planTier: PlanTier.ENTERPRISE,
-      status: 'ACTIVE',
-      currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-    },
+  // 5. Subscriptions (Idempotent)
+  const existingMainSub = await prisma.subscription.findFirst({
+    where: { organizationId: mainOrg.id },
   });
+  if (!existingMainSub) {
+    await prisma.subscription.create({
+      data: {
+        organizationId: mainOrg.id,
+        planTier: PlanTier.ENTERPRISE,
+        status: 'ACTIVE',
+        currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
 
-  await prisma.subscription.create({
-    data: {
-      organizationId: demoOrg.id,
-      planTier: PlanTier.FREE,
-      status: 'ACTIVE',
-      currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-    },
+  const existingDemoSub = await prisma.subscription.findFirst({
+    where: { organizationId: demoOrg.id },
   });
+  if (!existingDemoSub) {
+    await prisma.subscription.create({
+      data: {
+        organizationId: demoOrg.id,
+        planTier: PlanTier.FREE,
+        status: 'ACTIVE',
+        currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
 
   // 6. Demo & Sample Bots
   const demoBotPublicKey = 'demo-bot-12345';

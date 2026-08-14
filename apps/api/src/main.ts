@@ -25,9 +25,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
-
-import { execSync } from 'child_process';
-
+import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { prisma, ensureDatabaseTables } from '@webhook-auto/database';
 
 async function bootstrap() {
@@ -35,14 +33,14 @@ async function bootstrap() {
   try {
     await ensureDatabaseTables(prisma);
   } catch (dbErr: any) {
-    console.warn('Direct database initialization error:', dbErr.message);
+    console.warn('Direct database initialization notice:', dbErr.message);
   }
 
   const app = await NestFactory.create(AppModule);
 
   // Unconditional Preflight & CORS Header Handler
   app.use((req: any, res: any, next: any) => {
-    const origin = req.headers.origin || 'https://webhook-auto-web.onrender.com';
+    const origin = req.headers.origin || process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'https://webhook-auto-web.onrender.com';
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
@@ -52,13 +50,14 @@ async function bootstrap() {
     );
 
     if (req.method === 'OPTIONS') {
-      return res.status(200).send('OK');
+      return res.status(204).end();
     }
     next();
   });
 
-  // Global Interceptors & Pipes
+  // Global Interceptors, Filters & Pipes
   app.useGlobalInterceptors(new RequestIdInterceptor());
+  app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

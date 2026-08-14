@@ -41,9 +41,17 @@ export class AuthController {
 
   @Post('refresh')
   async refresh(@Body() body: any) {
-    const validated = RefreshTokenSchema.parse(body);
-    const result = await this.authService.refreshToken(validated.refreshToken);
-    return { success: true, data: result };
+    try {
+      const validated = RefreshTokenSchema.parse(body);
+      const result = await this.authService.refreshToken(validated.refreshToken);
+      return { success: true, data: result };
+    } catch (err: any) {
+      if (err?.name === 'ZodError') {
+        const firstIssue = err.issues?.[0]?.message || 'Invalid refresh token format';
+        throw new BadRequestException(firstIssue);
+      }
+      throw err;
+    }
   }
 
   @UseGuards(JwtAuthGuard)

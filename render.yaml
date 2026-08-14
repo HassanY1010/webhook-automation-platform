@@ -21,6 +21,18 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ENCRYPTION_MASTER_KEY
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://webhook-auto-web.onrender.com
+      - key: FRONTEND_URL
+        value: https://webhook-auto-web.onrender.com
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
 
   - type: web
     name: webhook-auto-worker
@@ -40,6 +52,11 @@ services:
           type: redis
           name: webhook-redis
           property: connectionString
+      - key: ENCRYPTION_MASTER_KEY
+        fromService:
+          type: web
+          name: webhook-auto-api
+          envVarKey: ENCRYPTION_MASTER_KEY
 
   - type: web
     name: webhook-auto-web

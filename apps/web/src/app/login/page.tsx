@@ -26,7 +26,7 @@ export default function LoginPage() {
 
     const res = await apiRequest('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: email.trim(), password }),
     });
 
     setLoading(false);
@@ -35,10 +35,23 @@ export default function LoginPage() {
       login(res.data.accessToken, res.data.user);
       router.push('/dashboard');
     } else {
-      setError(
-        res.error?.message ||
-          (isRtl ? 'فشل تسجيل الدخول، تأكد من بياناتك.' : 'Login failed, check your credentials.')
-      );
+      let errorMsg =
+        (typeof res.error === 'string' ? res.error : res.error?.message) ||
+        res.message;
+
+      if (!errorMsg || errorMsg === 'Unauthorized') {
+        if (res.statusCode === 500) {
+          errorMsg = isRtl
+            ? 'حدث خطأ في الخادم (HTTP 500)، يرجى مراجعة حالة النظام.'
+            : 'Server error (HTTP 500). Please check system status.';
+        } else {
+          errorMsg = isRtl
+            ? 'فشل تسجيل الدخول، تأكد من صحة البريد الإلكتروني وكلمة المرور.'
+            : 'Login failed, check your email and password.';
+        }
+      }
+
+      setError(Array.isArray(errorMsg) ? errorMsg[0] : errorMsg);
     }
   };
 
