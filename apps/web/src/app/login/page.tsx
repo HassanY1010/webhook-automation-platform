@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { Lock, Mail, ArrowRight, ArrowLeft, Eye, EyeOff, ShieldCheck, Globe, KeyRound } from 'lucide-react';
 
 export default function LoginPage() {
-  const { t, lang, setLang } = useLanguage();
+  const { lang, setLang } = useLanguage();
   const isRtl = lang === 'ar';
   const [email, setEmail] = useState('admin@webhookplatform.io');
   const [password, setPassword] = useState('Admin123456!');
@@ -35,7 +35,10 @@ export default function LoginPage() {
       login(res.data.accessToken, res.data.user);
       router.push('/dashboard');
     } else {
-      setError(res.error?.message || (isRtl ? 'فشل تسجيل الدخول، تأكد من بياناتك.' : 'Login failed, check your credentials.'));
+      setError(
+        res.error?.message ||
+          (isRtl ? 'فشل تسجيل الدخول، تأكد من بياناتك.' : 'Login failed, check your credentials.')
+      );
     }
   };
 
@@ -74,8 +77,14 @@ export default function LoginPage() {
               W
             </div>
           </Link>
-          <h1 className="text-2xl font-black text-white tracking-tight">{t('loginTitle')}</h1>
-          <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">{t('loginSubtitle')}</p>
+          <h1 className="text-2xl font-black text-white tracking-tight">
+            {isRtl ? 'تسجيل الدخول لمنظومتك' : 'Sign In to Your Workspace'}
+          </h1>
+          <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+            {isRtl
+              ? 'إدارة الـ Webhooks والبوتات والتنفيذات الآلية'
+              : 'Manage your automated webhooks, bots, and executions'}
+          </p>
         </div>
 
         {/* Quick Demo Credentials Autofill Banner */}
@@ -103,7 +112,9 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">{t('email')}</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              {isRtl ? 'البريد الإلكتروني' : 'Email Address'}
+            </label>
             <div className="relative">
               <Mail className={`w-4 h-4 text-slate-500 absolute top-3.5 ${isRtl ? 'right-3' : 'left-3'}`} />
               <input
@@ -120,7 +131,9 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">{t('password')}</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              {isRtl ? 'كلمة المرور' : 'Password'}
+            </label>
             <div className="relative">
               <Lock className={`w-4 h-4 text-slate-500 absolute top-3.5 ${isRtl ? 'right-3' : 'left-3'}`} />
               <input
@@ -148,22 +161,32 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all mt-6"
           >
-            {loading ? (isRtl ? 'جاري التحقق من الهوية...' : 'Authenticating...') : t('loginButton')}
+            {loading
+              ? isRtl
+                ? 'جاري التحقق من الهوية...'
+                : 'Authenticating...'
+              : isRtl
+              ? 'الدخول للوحة التحكم'
+              : 'Sign In to Dashboard'}
             {isRtl ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
           </button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-slate-800/80 text-center text-xs text-slate-400">
-          {t('noAccount')}{' '}
+          {isRtl ? 'ليس لديك حساب بعد؟' : "Don't have an account?"}{' '}
           <Link href="/register" className="text-blue-400 font-bold hover:underline">
-            {t('registerButton')}
+            {isRtl ? 'إنشاء حساب جديد' : 'Create Account'}
           </Link>
         </div>
 
         {/* Security certification badge */}
         <div className="mt-6 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>{isRtl ? 'تشفير AES-256 • حماية SSRF • عزل تام للمستأجرين' : 'AES-256 Encrypted • SSRF Guarded • Tenant Isolated'}</span>
+          <span>
+            {isRtl
+              ? 'تشفير AES-256 • حماية SSRF • عزل تام للمستأجرين'
+              : 'AES-256 Encrypted • SSRF Guarded • Tenant Isolated'}
+          </span>
         </div>
       </div>
     </div>
