@@ -1,4 +1,13 @@
-import { Controller, Post, Body, Get, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  UseGuards,
+  BadRequestException,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/user.decorator';
@@ -24,6 +33,7 @@ export class AuthController {
     }
   }
 
+  @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(@Body() body: any) {
     try {
@@ -39,6 +49,7 @@ export class AuthController {
     }
   }
 
+  @HttpCode(HttpStatus.OK)
   @Post('refresh')
   async refresh(@Body() body: any) {
     try {
@@ -60,6 +71,7 @@ export class AuthController {
     return { success: true, data: user };
   }
 
+  @HttpCode(HttpStatus.OK)
   @Post('logout')
   async logout() {
     return { success: true, message: 'Logged out successfully' };
