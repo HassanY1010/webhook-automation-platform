@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { BotsModule } from './bots/bots.module';
+import { SourcesModule } from './sources/sources.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { ExecutionsModule } from './executions/executions.module';
 import { TestingModule } from './testing/testing.module';
@@ -12,14 +14,14 @@ import { RedisService } from './common/services/redis.service';
   imports: [
     AuthModule,
     BotsModule,
+    SourcesModule,
+    ApiKeysModule,
     WebhooksModule,
     ExecutionsModule,
     TestingModule,
     AdminModule,
   ],
   controllers: [HealthController],
-  // RedisService is provided globally so HealthController and other non-module
-  // components can inject it without importing a separate module
   providers: [RedisService],
   exports: [RedisService],
 })

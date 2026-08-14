@@ -68,10 +68,25 @@ export const UpdateBotSchema = CreateBotSchema.partial().extend({
   status: z.enum(['DRAFT', 'ACTIVE', 'PAUSED', 'DISABLED', 'ERROR']).optional(),
 });
 
+// Source Schemas
+export const CreateSourceSchema = z.object({
+  name: z.string().min(2, 'Source name must be at least 2 characters'),
+  botId: z.string().uuid('Invalid bot ID').optional().nullable(),
+  type: z.nativeEnum(SourceType).default(SourceType.WEBHOOK),
+  config: z.record(z.any()).optional(),
+});
+
+export const UpdateSourceSchema = z.object({
+  name: z.string().min(2, 'Source name must be at least 2 characters').optional(),
+  botId: z.string().uuid('Invalid bot ID').optional().nullable(),
+  status: z.enum(['DRAFT', 'ACTIVE', 'PAUSED', 'DISABLED', 'ERROR']).optional(),
+  config: z.record(z.any()).optional(),
+});
+
 // API Key Schema
 export const CreateApiKeySchema = z.object({
-  name: z.string().min(2, 'Key name is required'),
-  expiresInDays: z.number().optional(),
+  name: z.string().min(2, 'Key name must be at least 2 characters'),
+  expiresInDays: z.number().int().positive().optional().nullable(),
   scopes: z.array(z.string()).default(['*']),
 });
 

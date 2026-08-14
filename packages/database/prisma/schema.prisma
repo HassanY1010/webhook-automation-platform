@@ -156,18 +156,24 @@ model BotVersion {
 }
 
 model Source {
-  id             String       @id @default(uuid())
-  organizationId String
-  botId          String?
-  name           String
-  type           SourceType   @default(WEBHOOK)
-  config         Json?
-  secretKeyHash  String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  bot            Bot?         @relation(fields: [botId], references: [id], onDelete: SetNull)
+  id              String       @id @default(uuid())
+  organizationId  String
+  botId           String?
+  name            String
+  type            SourceType   @default(WEBHOOK)
+  status          BotStatus    @default(ACTIVE)
+  publicKey       String       @unique @default(uuid())
+  secretEncrypted String?
+  config          Json?
+  secretKeyHash   String?
+  eventsCount     Int          @default(0)
+  lastEventAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bot             Bot?         @relation(fields: [botId], references: [id], onDelete: SetNull)
 
+  @@index([organizationId])
   @@map("sources")
 }
 
