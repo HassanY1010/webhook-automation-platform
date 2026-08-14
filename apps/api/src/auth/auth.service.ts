@@ -1,214 +1,136 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { prisma, RoleName } from '@webhook-auto/database';
 import { hashPassword, verifyPassword } from '@webhook-auto/security';
-import { PLANS_CONFIG } from '@webhook-auto/config';
 
 @Injectable()
 export class AuthService {
   constructor(private jwtService: JwtService) {}
 
-  async register(data: { email: string; password: string; fullName: string; organizationName: string }) {
-    try {
-      let existing: any = null;
-      try {
-        existing = await prisma.user.findUnique({ where: { email: data.email } });
-      } catch (findErr: any) {
-        console.error('[AUTH REGISTER DB SEARCH WARN]:', findErr?.message || findErr);
-      }
+  async register(data: {
+    email: string;
+    password: string;
+    fullName: string;
+    organizationName: string;
+  }) {
+    // Check for existing user first
+    const existing = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
 
-      if (existing) {
-        throw new BadRequestException('User with this email already exists');
-      }
-
-      const passwordHash = await hashPassword(data.password);
-      const safeOrgName = data.organizationName || 'Default Org';
-      const slug =
-        safeOrgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') +
-        '-' +
-        Math.floor(Math.random() * 1000);
-
-      try {
-        const user = await prisma.$transaction(async (tx) => {
-          const newUser = await tx.user.create({
-            data: {
-              email: data.email,
-              fullName: data.fullName,
-              passwordHash,
-              isEmailVerified: true,
-            },
-          });
-
-          const newOrg = await tx.organization.create({
-            data: {
-              name: safeOrgName,
-              slug,
-            },
-          });
-
-          await tx.organizationMember.create({
-            data: {
-              organizationId: newOrg.id,
-              userId: newUser.id,
-              role: RoleName.OWNER,
-            },
-          });
-
-          await tx.subscription.create({
-            data: {
-              organizationId: newOrg.id,
-              planTier: 'FREE',
-              status: 'ACTIVE',
-              currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-            },
-          });
-
-          return { user: newUser, org: newOrg };
-        });
-
-        const tokens = this.generateTokens(user.user.id, user.org.id, RoleName.OWNER);
-        return {
-          user: { id: user.user.id, email: user.user.email, fullName: user.user.fullName },
-          organization: user.org,
-          ...tokens,
-        };
-      } catch (dbTxErr: any) {
-        console.error('[AUTH REGISTER DB TX ERROR]:', dbTxErr?.message || dbTxErr);
-        if (dbTxErr?.code === 'P2002' || String(dbTxErr?.message).includes('Unique constraint')) {
-          throw new BadRequestException('User with this email already exists');
-        }
-
-        // Zero-downtime fallback registration if database is unreachable or unmigrated
-        const fallbackUserId = `usr_reg_${Date.now()}`;
-        const fallbackOrgId = `org_reg_${Date.now()}`;
-        const tokens = this.generateTokens(fallbackUserId, fallbackOrgId, RoleName.OWNER);
-        return {
-          user: { id: fallbackUserId, email: data.email, fullName: data.fullName },
-          organization: { id: fallbackOrgId, name: safeOrgName, slug },
-          ...tokens,
-        };
-      }
-    } catch (err: any) {
-      if (err instanceof BadRequestException || err instanceof UnauthorizedException) {
-        throw err;
-      }
-      console.error('[AUTH SERVICE REGISTER ERROR]:', err?.message || err);
-      throw new BadRequestException(err?.message || 'Registration failed');
+    if (existing) {
+      throw new BadRequestException('User with this email already exists');
     }
+
+    const passwordHash = await hashPassword(data.password);
+    const safeOrgName = data.organizationName || 'Default Org';
+    const slug =
+      safeOrgName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') +
+      '-' +
+      Math.floor(Math.random() * 100000);
+
+    // Single transaction — no fallback on failure
+    const result = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: data.email,
+          fullName: data.fullName,
+          passwordHash,
+          isEmailVerified: true,
+        },
+      });
+
+      const newOrg = await tx.organization.create({
+        data: { name: safeOrgName, slug },
+      });
+
+      await tx.organizationMember.create({
+        data: {
+          organizationId: newOrg.id,
+          userId: newUser.id,
+          role: RoleName.OWNER,
+        },
+      });
+
+      await tx.subscription.create({
+        data: {
+          organizationId: newOrg.id,
+          planTier: 'FREE',
+          status: 'ACTIVE',
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      return { user: newUser, org: newOrg };
+    });
+
+    // generateTokens throws on failure — no catch wrapper
+    const tokens = this.generateTokens(
+      result.user.id,
+      result.org.id,
+      RoleName.OWNER,
+    );
+
+    return {
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        fullName: result.user.fullName,
+      },
+      organization: result.org,
+      ...tokens,
+    };
   }
 
   async login(data: { email: string; password: string }) {
-    try {
-      let user: any = await prisma.user.findUnique({
-        where: { email: data.email },
-        include: { memberships: { include: { organization: true } } },
-      });
+    const user = await prisma.user.findUnique({
+      where: { email: data.email },
+      include: { memberships: { include: { organization: true } } },
+    });
 
-      // Auto-provision Default Admin account for live demo deployment if missing
-      if (!user && data.email === 'admin@webhookplatform.io') {
-        try {
-          const passwordHash = await hashPassword(data.password || 'password123');
-          const slug = 'enterprise-hq-' + Math.floor(Math.random() * 1000);
-          await prisma.$transaction(async (tx) => {
-            const newUser = await tx.user.create({
-              data: {
-                email: 'admin@webhookplatform.io',
-                fullName: 'Enterprise Admin',
-                passwordHash,
-                isEmailVerified: true,
-              },
-            });
-            const newOrg = await tx.organization.create({
-              data: {
-                name: 'Enterprise Automation HQ',
-                slug,
-              },
-            });
-            await tx.organizationMember.create({
-              data: {
-                organizationId: newOrg.id,
-                userId: newUser.id,
-                role: RoleName.OWNER,
-              },
-            });
-            await tx.subscription.create({
-              data: {
-                organizationId: newOrg.id,
-                planTier: 'ENTERPRISE',
-                status: 'ACTIVE',
-                currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-              },
-            });
-          });
-
-          user = await prisma.user.findUnique({
-            where: { email: 'admin@webhookplatform.io' },
-            include: { memberships: { include: { organization: true } } },
-          });
-        } catch (provisionErr) {
-          console.error('Failed to auto-provision default admin:', provisionErr);
-        }
-      }
-
-      if (!user) {
-        throw new UnauthorizedException('Invalid email or password');
-      }
-
-      let isValid = await verifyPassword(data.password, user.passwordHash);
-      if (!isValid && data.email === 'admin@webhookplatform.io') {
-        const newHash = await hashPassword(data.password);
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { passwordHash: newHash },
-        });
-        user.passwordHash = newHash;
-        isValid = true;
-      }
-
-      if (!isValid) {
-        throw new UnauthorizedException('Invalid email or password');
-      }
-
-      const firstMembership = user.memberships?.[0];
-      if (!firstMembership) {
-        throw new BadRequestException('User belongs to no organization');
-      }
-
-      const tokens = this.generateTokens(user.id, firstMembership.organizationId, firstMembership.role);
-
-      return {
-        user: { id: user.id, email: user.email, fullName: user.fullName },
-        organization: firstMembership.organization,
-        role: firstMembership.role,
-        ...tokens,
-      };
-    } catch (err: any) {
-      console.error('[AUTH SERVICE LOGIN WARNING]:', err?.message || err);
-      
-      // Fallback zero-downtime authorization for live demo admin
-      if (data.email === 'admin@webhookplatform.io') {
-        const demoUserId = 'usr_admin_demo_1001';
-        const demoOrgId = 'org_admin_demo_1001';
-        const tokens = this.generateTokens(demoUserId, demoOrgId, RoleName.OWNER);
-        return {
-          user: { id: demoUserId, email: 'admin@webhookplatform.io', fullName: 'Enterprise Admin' },
-          organization: { id: demoOrgId, name: 'Enterprise Automation HQ', slug: 'enterprise-hq' },
-          role: RoleName.OWNER,
-          ...tokens,
-        };
-      }
-
-      if (err instanceof UnauthorizedException || err instanceof BadRequestException) {
-        throw err;
-      }
-      throw new UnauthorizedException(err?.message || 'Authentication failed');
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
     }
+
+    const isValid = await verifyPassword(data.password, user.passwordHash);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const firstMembership = user.memberships?.[0];
+    if (!firstMembership) {
+      throw new BadRequestException('User belongs to no organization');
+    }
+
+    // generateTokens throws on failure — no catch wrapper
+    const tokens = this.generateTokens(
+      user.id,
+      firstMembership.organizationId,
+      firstMembership.role,
+    );
+
+    return {
+      user: { id: user.id, email: user.email, fullName: user.fullName },
+      organization: firstMembership.organization,
+      role: firstMembership.role,
+      ...tokens,
+    };
   }
 
   async refreshToken(refreshToken: string) {
     try {
       const payload = this.jwtService.verify(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET || 'super-secret-refresh-token-key-change-in-production-min-32-chars',
+        secret:
+          process.env.JWT_REFRESH_SECRET ||
+          'super-secret-refresh-token-key-change-in-production-min-32-chars',
       });
       return this.generateTokens(payload.sub, payload.orgId, payload.role);
     } catch {
@@ -218,18 +140,29 @@ export class AuthService {
 
   private generateTokens(userId: string, orgId: string, role: string) {
     const payload = { sub: userId, orgId, role };
-    const secret = String(process.env.JWT_SECRET || 'super-secret-access-token-key-change-in-production-min-32-chars');
-    const refreshSecret = String(process.env.JWT_REFRESH_SECRET || 'super-secret-refresh-token-key-change-in-production-min-32-chars');
+    const secret = String(
+      process.env.JWT_SECRET ||
+        'super-secret-access-token-key-change-in-production-min-32-chars',
+    );
+    const refreshSecret = String(
+      process.env.JWT_REFRESH_SECRET ||
+        'super-secret-refresh-token-key-change-in-production-min-32-chars',
+    );
 
-    try {
-      const accessToken = this.jwtService.sign(payload, { secret, expiresIn: '1d' });
-      const refreshToken = this.jwtService.sign(payload, { secret: refreshSecret, expiresIn: '7d' });
-      return { accessToken, refreshToken };
-    } catch (e) {
-      console.warn('[JWT GENERATION WARNING - USING FALLBACK TOKEN]:', e);
-      const mockAccess = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI${Buffer.from(userId).toString('base64')}.${Date.now()}`;
-      const mockRefresh = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ref.${Date.now()}`;
-      return { accessToken: mockAccess, refreshToken: mockRefresh };
-    }
+    // Read expiry from environment — honour the configured values
+    const accessExpiresIn = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
+    const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+
+    // If jwt.sign() throws, the exception propagates — no fake token issued
+    const accessToken = this.jwtService.sign(payload, {
+      secret,
+      expiresIn: accessExpiresIn,
+    });
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: refreshSecret,
+      expiresIn: refreshExpiresIn,
+    });
+
+    return { accessToken, refreshToken };
   }
 }

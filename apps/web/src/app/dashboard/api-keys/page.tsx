@@ -56,6 +56,21 @@ export default function ApiKeysPage() {
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* Coming Soon Banner */}
+      <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3">
+        <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-amber-300">
+            {isRtl ? 'هذه الميزة قيد التطوير' : 'API Key Management — Coming Soon'}
+          </p>
+          <p className="text-xs text-amber-400/80 mt-1">
+            {isRtl
+              ? 'إدارة مفاتيح API من الواجهة ستكون متاحة قريباً. يمكنك حالياً استخدام مفتاح JWT من تسجيل الدخول للوصول إلى REST API.'
+              : 'UI-based API key management is coming soon. For now, use the JWT Bearer token from your login response to authenticate REST API requests.'}
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-100">{t('apiKeys')}</h1>
@@ -68,6 +83,7 @@ export default function ApiKeysPage() {
 
         <button
           onClick={generateNewKey}
+          disabled
           className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 self-start sm:self-auto shadow-lg shadow-blue-500/20 transition-all"
         >
           <Plus className="w-4 h-4" />

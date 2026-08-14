@@ -18,6 +18,9 @@ import { RedisService } from './common/services/redis.service';
     AdminModule,
   ],
   controllers: [HealthController],
+  // RedisService is provided globally so HealthController and other non-module
+  // components can inject it without importing a separate module
   providers: [RedisService],
+  exports: [RedisService],
 })
 export class AppModule {}
