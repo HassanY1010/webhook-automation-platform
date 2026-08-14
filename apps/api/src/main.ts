@@ -28,36 +28,14 @@ import { RequestIdInterceptor } from './common/interceptors/request-id.intercept
 
 import { execSync } from 'child_process';
 
+import { prisma, ensureDatabaseTables } from '@webhook-auto/database';
+
 async function bootstrap() {
-  // Auto-migrate and seed production PostgreSQL database schema at runtime startup
+  // Ensure database tables and default admin account exist via direct SQL
   try {
-    const candidatePaths = [
-      path.resolve(process.cwd(), 'packages/database/prisma/schema.prisma'),
-      path.resolve(__dirname, '../../packages/database/prisma/schema.prisma'),
-      path.resolve(__dirname, '../../../packages/database/prisma/schema.prisma'),
-      path.resolve(__dirname, '../packages/database/prisma/schema.prisma'),
-    ];
-    const targetSchema = candidatePaths.find((p) => fs.existsSync(p));
-
-    if (targetSchema && process.env.DATABASE_URL) {
-      console.log(`📦 Found schema at ${targetSchema}. Auto-migrating PostgreSQL database...`);
-      execSync(`npx prisma db push --schema="${targetSchema}" --accept-data-loss`, { stdio: 'inherit' });
-      console.log('✅ PostgreSQL database schema migrated successfully!');
-
-      // Run database seed to guarantee default admin account exists
-      const seedPaths = [
-        path.resolve(process.cwd(), 'packages/database/prisma/seed.js'),
-        path.resolve(path.dirname(targetSchema), 'seed.js'),
-      ];
-      const targetSeed = seedPaths.find((p) => fs.existsSync(p));
-      if (targetSeed) {
-        console.log(`🌱 Executing database seed from ${targetSeed}...`);
-        execSync(`node "${targetSeed}"`, { stdio: 'inherit' });
-        console.log('✅ Database seeded successfully!');
-      }
-    }
-  } catch (migErr: any) {
-    console.warn('Database startup migration status:', migErr.message);
+    await ensureDatabaseTables(prisma);
+  } catch (dbErr: any) {
+    console.warn('Direct database initialization error:', dbErr.message);
   }
 
   const app = await NestFactory.create(AppModule);

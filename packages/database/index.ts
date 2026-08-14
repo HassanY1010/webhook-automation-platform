@@ -36,6 +36,7 @@ if (dbUrl && !dbUrl.includes('sslmode=') && (process.env.NODE_ENV === 'productio
   dbUrl = dbUrl.includes('?') ? `${dbUrl}&sslmode=no-verify` : `${dbUrl}?sslmode=no-verify`;
 }
 
+export * from './src/init-db';
 export * from '@prisma/client';
 
 export const prisma = new PrismaClient({
