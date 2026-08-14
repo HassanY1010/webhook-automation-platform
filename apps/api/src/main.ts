@@ -29,19 +29,35 @@ import { RequestIdInterceptor } from './common/interceptors/request-id.intercept
 import { execSync } from 'child_process';
 
 async function bootstrap() {
-  // Auto-migrate production PostgreSQL database schema at runtime startup
+  // Auto-migrate and seed production PostgreSQL database schema at runtime startup
   try {
-    const schemaPath = path.resolve(__dirname, '../../packages/database/prisma/schema.prisma');
-    const altSchemaPath = path.resolve(__dirname, '../../../packages/database/prisma/schema.prisma');
-    const targetSchema = fs.existsSync(schemaPath) ? schemaPath : fs.existsSync(altSchemaPath) ? altSchemaPath : null;
+    const candidatePaths = [
+      path.resolve(process.cwd(), 'packages/database/prisma/schema.prisma'),
+      path.resolve(__dirname, '../../packages/database/prisma/schema.prisma'),
+      path.resolve(__dirname, '../../../packages/database/prisma/schema.prisma'),
+      path.resolve(__dirname, '../packages/database/prisma/schema.prisma'),
+    ];
+    const targetSchema = candidatePaths.find((p) => fs.existsSync(p));
 
     if (targetSchema && process.env.DATABASE_URL) {
-      console.log('📦 Auto-migrating PostgreSQL database schema on startup...');
+      console.log(`📦 Found schema at ${targetSchema}. Auto-migrating PostgreSQL database...`);
       execSync(`npx prisma db push --schema="${targetSchema}" --accept-data-loss`, { stdio: 'inherit' });
       console.log('✅ PostgreSQL database schema migrated successfully!');
+
+      // Run database seed to guarantee default admin account exists
+      const seedPaths = [
+        path.resolve(process.cwd(), 'packages/database/prisma/seed.js'),
+        path.resolve(path.dirname(targetSchema), 'seed.js'),
+      ];
+      const targetSeed = seedPaths.find((p) => fs.existsSync(p));
+      if (targetSeed) {
+        console.log(`🌱 Executing database seed from ${targetSeed}...`);
+        execSync(`node "${targetSeed}"`, { stdio: 'inherit' });
+        console.log('✅ Database seeded successfully!');
+      }
     }
   } catch (migErr: any) {
-    console.warn('Database migration status:', migErr.message);
+    console.warn('Database startup migration status:', migErr.message);
   }
 
   const app = await NestFactory.create(AppModule);
