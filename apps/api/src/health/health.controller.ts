@@ -11,15 +11,34 @@ export class HealthController {
     return { status: 'UP', timestamp: new Date().toISOString() };
   }
 
+  @Get('version')
+  getVersion() {
+    return {
+      status: 'UP',
+      version: '1.0.1-prod',
+      deployedCommit: 'ad1491e',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   @Get('ready')
   async getReadiness() {
-    const results: Record<string, string> = {};
+    const results: Record<string, any> = {};
     const errors: string[] = [];
 
     // ── PostgreSQL check ──────────────────────────────────────────────────────
     try {
       await prisma.$queryRaw`SELECT 1`;
       results.database = 'UP';
+
+      // Test Prisma ORM Model Queries
+      try {
+        const userCount = await prisma.user.count();
+        results.userCount = userCount;
+      } catch (uErr: any) {
+        results.userQueryError = uErr.message;
+        errors.push(`userQuery: ${uErr.message}`);
+      }
     } catch (err: any) {
       results.database = 'DOWN';
       errors.push(`database: ${err.message}`);
@@ -29,7 +48,6 @@ export class HealthController {
     try {
       const probe = `health:probe:${Date.now()}`;
       const client = this.redisService.getClient();
-      // ping returns PONG — throws if disconnected
       const pong = await client.ping();
       if (pong !== 'PONG') throw new Error(`Unexpected Redis ping response: ${pong}`);
       results.redis = 'UP';
@@ -41,7 +59,6 @@ export class HealthController {
     const allUp = errors.length === 0;
 
     if (!allUp) {
-      // Return 503 so load balancers / Render remove this instance from rotation
       throw new ServiceUnavailableException({
         status: 'DOWN',
         services: results,
