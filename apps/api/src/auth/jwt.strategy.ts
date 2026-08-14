@@ -33,6 +33,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     // Default to payload organization or user's first organization
     const orgId = payload.orgId || user.memberships[0]?.organizationId;
+    if (!orgId) {
+      throw new UnauthorizedException('User has no active organization membership');
+    }
     const membership = user.memberships.find((m) => m.organizationId === orgId);
 
     return {

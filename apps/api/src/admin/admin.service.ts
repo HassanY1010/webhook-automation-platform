@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { prisma, ExecutionStatus } from '@webhook-auto/database';
+import { prisma, ExecutionStatus, BotStatus } from '@webhook-auto/database';
 
 @Injectable()
 export class AdminService {
@@ -50,7 +50,7 @@ export class AdminService {
       recentExecutions,
     ] = await Promise.all([
       prisma.bot.count({ where: { organizationId } }),
-      prisma.bot.count({ where: { organizationId, status: 'ACTIVE' } }),
+      prisma.bot.count({ where: { organizationId, status: BotStatus.ACTIVE } }),
       prisma.execution.count({ where: { organizationId } }),
       prisma.execution.count({
         where: { organizationId, status: ExecutionStatus.SUCCESS },
